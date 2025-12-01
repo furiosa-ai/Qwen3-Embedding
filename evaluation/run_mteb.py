@@ -12,10 +12,7 @@ import mteb
 from pathlib import Path
 from mteb import AbsTaskRetrieval,RetrievalEvaluator
 from time import time
-from mteb.models.sentence_transformer_wrapper import SentenceTransformerWrapper
 import csv
-from mteb.benchmarks.benchmarks import Benchmark
-from qwen3_embedding_model import Qwen3Embedding
 from utils import *
 
 logging.basicConfig(
@@ -202,6 +199,10 @@ class EvalArguments:
         default=None,
         metadata={"help": "Model name for the save path"}
     )
+    backend: Optional[str] = field(
+        default="transformers",
+        metadata={"help": "Backend for the model"}
+    )
     model_kwargs: Optional[str] = field(
         default=None,
         metadata={"help": "The specific model kwargs, json string."},
@@ -247,7 +248,14 @@ def get_tasks(names: list[str] | None, languages: list[str] | None = None, bench
     return tasks
 
 
-def get_model(model_path: str, model_name: str, precision: str = 'fp16', **kwargs):
+def get_model(model_path: str, model_name: str, precision: str = 'fp16', backend: str = "transformers",  **kwargs):
+    if  backend == "openai":
+        from qwen3_embedding_model_openai import Qwen3Embedding
+    elif backend == "transformers":
+        from qwen3_embedding_model import Qwen3Embedding
+    else:
+        raise ValueError(f"Unsupported backend: {backend}")
+
     model = Qwen3Embedding(model_path, model_name=model_name, precision=precision, **kwargs)
     return model
 
@@ -319,6 +327,7 @@ def run_eval(model, tasks: list, args: EvalArguments, **kwargs):
                 encode_kwargs=encode_kwargs,
                 **kwargs
             )
+            print(results) # debug
         except Exception as e:
             try:
                 os.environ['HF_DATASETS_OFFLINE'] = "0"
@@ -367,7 +376,7 @@ def main():
             
         if not args.load_model:
             return
-    model = get_model(args.model, args.model_name, precision=args.precision, **args.model_kwargs)
+    model = get_model(args.model, args.model_name, precision=args.precision, backend=args.backend, **args.model_kwargs)
     if args.only_load:
         return
 
