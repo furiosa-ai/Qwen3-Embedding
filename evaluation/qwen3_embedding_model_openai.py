@@ -75,13 +75,6 @@ class OpenAITextEmbedder(torch.nn.Module):
         
         return embeddings
 
-    def tokenize(self, texts, max_length: int, prompt=None) -> BatchEncoding:
-        if prompt:
-            texts = [prompt + t for t in texts]
-
-        inputs = self.tokenizer(texts, padding=True, truncation=True, max_length=max_length,)['input_ids']        
-        return inputs
-
 def _encode_loop(
     model: TransformersTextEmbedder,
     input_queue,
