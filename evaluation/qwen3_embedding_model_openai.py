@@ -40,12 +40,6 @@ class OpenAITextEmbedder(torch.nn.Module):
         self.model = model 
         self.client = OpenAI(api_key=api_key, base_url=base_url)
         self.tokenizer = AutoTokenizer.from_pretrained(model, **kwargs)
-
-        # For Qwen 8B models, set padding token to eos token,
-        # For Qwen 0.6B models, no need to set padding token
-        self.tokenizer.pad_token = self.tokenizer.eos_token
-        
-        self.tokenizer.padding_side = "left"
         
         self.pooler_type = pooler_type
         self.do_norm = do_norm
