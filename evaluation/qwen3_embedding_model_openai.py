@@ -62,16 +62,11 @@ class OpenAITextEmbedder(torch.nn.Module):
         device: str | torch.device = 'cpu',
     ) -> torch.Tensor:
         
-        sentences = self.tokenize(sentences, max_length, prompt)
-        
         embeddings = self.client.embeddings.create(model=self.model, input = sentences, encoding_format="float")
         embeddings = torch.tensor([l.embedding for l in embeddings.data])
 
         if self.truncate_dim > 0: 
             embeddings = embeddings[:, :self.truncate_dim]
-        
-        if self.do_norm:
-            embeddings = torch.nn.functional.normalize(embeddings, p=2, dim=1)
         
         return embeddings
 
