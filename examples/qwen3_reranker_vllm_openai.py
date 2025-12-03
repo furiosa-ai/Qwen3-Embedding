@@ -19,17 +19,25 @@ from torch.utils.data._utils.worker import ManagerWatchdog
 from tqdm import tqdm
 from transformers import AutoTokenizer, AutoModelForCausalLM, AutoModelForSequenceClassification, AutoModel, is_torch_npu_available
 logger = logging.getLogger(__name__)
-from vllm import LLM, SamplingParams
-from vllm.distributed.parallel_state import destroy_model_parallel
+#from vllm import LLM, SamplingParams
+#from vllm.distributed.parallel_state import destroy_model_parallel
 import gc
 import math
-from sentence_transformers import CrossEncoder, SentenceTransformer
-from vllm.inputs.data import TokensPrompt
+#from sentence_transformers import CrossEncoder, SentenceTransformer
+#from vllm.inputs.data import TokensPrompt
+from openai import OpenAI
 
-
-class Qwen3Rerankervllm(CrossEncoder):
-    def __init__(self, model_name_or_path, instruction="Given the user query, retrieval the relevant passages", **kwargs):
-        number_of_gpu=torch.cuda.device_count()
+class Qwen3RerankerOpenAI(torch.nn.Module):
+    """
+    vllm serve Qwen/Qwen3-Reranker-8B 
+    """
+    def __init__(self, 
+                model_name_or_path,
+                instruction="Given the user query, retrieval the relevant passages", 
+                api_key: str = "", 
+                base_url: str = "http://localhost:8000/v1", 
+                **kwargs):
+        self.model_name_or_path = model_name_or_path
         self.instruction = instruction
         self.tokenizer = AutoTokenizer.from_pretrained(model_name_or_path)
         self.tokenizer.padding_side = "left"
@@ -37,17 +45,13 @@ class Qwen3Rerankervllm(CrossEncoder):
         self.suffix = "<|im_start|>assistant\n<think>\n\n</think>\n\n"
         self.max_length=kwargs.get('max_length', 8192)
         self.suffix_tokens = self.tokenizer.encode(self.suffix, add_special_tokens=False)
-        self.true_token = self.tokenizer("yes", add_special_tokens=False).input_ids[0]
-        self.false_token = self.tokenizer("no", add_special_tokens=False).input_ids[0]
-        self.sampling_params = SamplingParams(temperature=0, 
-            top_p=0.95, 
-            max_tokens=1,
-            logprobs=20, 
-            allowed_token_ids=[self.true_token,self.false_token],
-        )
-        self.lm = LLM(model=model_name_or_path, tensor_parallel_size=number_of_gpu, max_model_len=10000, enable_prefix_caching=True, distributed_executor_backend='ray', gpu_memory_utilization=0.8)
-
         
+        self.true_token = "yes"
+        self.false_token = "no"
+        self.true_token_id = self.tokenizer(self.true_token, add_special_tokens=False).input_ids[0]
+        self.false_token_id = self.tokenizer(self.false_token, add_special_tokens=False).input_ids[0]
+
+        self.client = OpenAI(api_key=api_key, base_url=base_url)
 
     def format_instruction(self, instruction, query, doc):
         if isinstance(query, tuple):
@@ -65,20 +69,29 @@ class Qwen3Rerankervllm(CrossEncoder):
             messages, tokenize=True, add_generation_prompt=False, enable_thinking=False
         )
         messages = [ele[:self.max_length] + self.suffix_tokens for ele in messages]
-        messages = [TokensPrompt(prompt_token_ids=ele) for ele in messages]
-        outputs = self.lm.generate(messages, self.sampling_params, use_tqdm=False)
+        
+
+
+        response = self.client.completions.create(
+            model=self.model_name_or_path,
+            prompt=messages,
+            top_p=0.95,
+            max_tokens=1,
+            logprobs=20,
+            extra_body={"allowed_token_ids": [self.true_token_id, self.false_token_id]})
+
         scores = []
-        for i in range(len(outputs)):
-            final_logits = outputs[i].outputs[0].logprobs[-1]
-            token_count = len(outputs[i].outputs[0].token_ids)
+        for i in range(len(response.choices)):
+            final_logits = response.choices[i].logprobs.top_logprobs[-1]
+            
             if self.true_token not in final_logits:
                 true_logit = -10
             else:
-                true_logit = final_logits[self.true_token].logprob
+                true_logit = final_logits[self.true_token]
             if self.false_token not in final_logits:
                 false_logit = -10
             else:
-                false_logit = final_logits[self.false_token].logprob
+                false_logit = final_logits[self.false_token]
             true_score = math.exp(true_logit)
             false_score = math.exp(false_logit)
             score = true_score / (true_score + false_score)
@@ -87,10 +100,10 @@ class Qwen3Rerankervllm(CrossEncoder):
         return scores
 
     def stop(self):
-        destroy_model_parallel()
+        pass
 
 if __name__ == '__main__':
-    model = Qwen3Rerankervllm(model_name_or_path='Qwen/Qwen3-Reranker-8B', instruction="Retrieval document that can answer user's query", max_length=2048)
+    model = Qwen3RerankerOpenAI(model_name_or_path='Qwen/Qwen3-Reranker-8B', instruction="Retrieval document that can answer user's query", max_length=2048)
     queries = ['What is the capital of China?', 'Explain gravity']
     documents = [
         "The capital of China is Beijing.",
@@ -102,11 +115,10 @@ if __name__ == '__main__':
     model.stop()
     """
     qwen3-reranker-0.6b
-    scores [0.9947798735326427, 0.998189788623767]
+    scores [0.9947798749641705, 0.9982992772280448]
 
     qwen3-reranker-8b
     scores [0.9959298619216863, 0.9961755163553628]
     """
-
 
 

@@ -56,7 +56,7 @@ class Qwen3Embedding():
         return output
 
 if __name__ == "__main__":
-    model_path = "Qwen/Qwen3-Embedding-0.6B"
+    model_path = "Qwen/Qwen3-Embedding-8B"
     model = Qwen3Embedding(model_path)
     queries = ['What is the capital of China?', 'Explain gravity']
     documents = [
@@ -64,9 +64,29 @@ if __name__ == "__main__":
         "Gravity is a force that attracts two bodies towards each other. It gives weight to physical objects and is responsible for the movement of planets around the sun."
     ]
     dim = 1024
-    query_outputs = model.encode(queries, is_query=True, dim=dim)
-    doc_outputs = model.encode(documents, dim=dim)
+    query_outputs = model.encode(queries, is_query=True)
+    doc_outputs = model.encode(documents)
     print('query outputs', query_outputs)
     print('doc outputs', doc_outputs)
     scores = (query_outputs @ doc_outputs.T) * 100
     print(scores.tolist())
+    """
+    qwen3-embedding-0.6b
+    query outputs tensor([[-5.0842e-02, -2.9129e-02, -3.3975e-05,  ...,  7.4158e-02,
+          3.6041e-02, -1.1688e-02],
+        [-1.1124e-02, -3.4241e-02, -1.1120e-03,  ..., -2.6474e-02,
+          2.8229e-03, -1.4830e-03]], device='cuda:0', dtype=torch.float16)
+    doc outputs tensor([[-0.0472, -0.0207,  0.0036,  ...,  0.0562,  0.0707, -0.0171],
+            [-0.0531, -0.0151, -0.0013,  ...,  0.0037, -0.0205,  0.0196]],
+        device='cuda:0', dtype=torch.float16)
+    [[76.4375, 14.1328125], [13.5859375, 60.0]]
+
+    qwen3-embedding-8b
+    query outputs tensor([[-0.0266,  0.0472, -0.0160,  ..., -0.0113,  0.0042,  0.0148],
+        [ 0.0333, -0.0069, -0.0064,  ..., -0.0058, -0.0098,  0.0075]],
+       device='cuda:0', dtype=torch.float16)
+    doc outputs tensor([[-0.0139,  0.0524, -0.0032,  ..., -0.0044,  0.0094,  0.0112],
+            [ 0.0389,  0.0194, -0.0112,  ..., -0.0096,  0.0064, -0.0007]],
+        device='cuda:0', dtype=torch.float16)
+    [[75.0, 7.53125], [8.796875, 63.1875]]
+    """
