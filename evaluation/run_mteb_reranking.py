@@ -106,8 +106,12 @@ def get_tasks(names: list[str] | None, languages: list[str] | None = None, bench
 def get_model(model_name: str,  precision: str = 'fp16', backend: str = "openai", **kwargs):
     if backend == "vllm":
         from qwen3_reranker_model import Qwen3RerankerInferenceModel
-    if backend == "openai":
+    elif backend == "openai":
         from qwen3_reranker_model_openai import Qwen3RerankerInferenceModel
+    elif backend == "score_api":
+        from qwen3_reranker_model_score_api import Qwen3RerankerInferenceModel
+    else:
+        raise ValueError(f"Unknown backend {backend}")
     model = Qwen3RerankerInferenceModel(model_name, **kwargs)
     return model
 
@@ -221,7 +225,7 @@ def main():
             t.load_data()
         if not args.load_model:
             return
-    model = get_model(args.model, **args.model_kwargs)
+    model = get_model(args.model, backend=args.backend, **args.model_kwargs)
     if args.only_load:
         return
 

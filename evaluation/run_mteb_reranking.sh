@@ -9,7 +9,7 @@ previous_save_path="/workspace/Qwen3-Embedding/evaluation/retrieval_data"
 python run_mteb_reranking.py \
   --model ${model_path} \
   --batch_size 16 --precision fp16 \
-  --backend "openai" \
+  --backend "score_api" \
   --model_kwargs "{\"batch_size\": 8}" \
   --run_kwargs "{\"save_predictions\": \"true\"}" \
   --previous_results ${previous_save_path} \
