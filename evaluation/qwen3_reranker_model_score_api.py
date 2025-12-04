@@ -9,7 +9,6 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from tqdm import tqdm
 from typing import Union, List, Tuple, Any
-import requests
 
 import numpy as np
 import torch
@@ -20,32 +19,26 @@ from torch.utils.data._utils.worker import ManagerWatchdog
 from tqdm import tqdm
 from transformers import AutoTokenizer, AutoModelForCausalLM, AutoModelForSequenceClassification, AutoModel, is_torch_npu_available
 logger = logging.getLogger(__name__)
-from vllm import LLM, SamplingParams
-from vllm.distributed.parallel_state import destroy_model_parallel
+
 import gc
 import math
-from sentence_transformers import CrossEncoder, SentenceTransformer
-from vllm.inputs.data import TokensPrompt
+from openai import OpenAI
 
-
-class Qwen3RerankervllmSeqClass(CrossEncoder):
+class Qwen3RerankerInferenceModel(torch.nn.Module):
     """
-    https://docs.vllm.ai/en/v0.11.2/examples/offline_inference/pooling/
-
-    vllm serve Qwen/Qwen3-Reranker-8B --hf_overrides '{"architectures": ["Qwen3ForSequenceClassification"],"classifier_from_token": ["no", "yes"],"is_original_qwen3_reranker": true}'
-    
+    vllm serve Qwen/Qwen3-Reranker-8B --hf_overrides '{"architectures": ["Qwen3ForSequenceClassification"],"classifier_from_token": ["no", "yes"],"is_original_qwen3_reranker": true}' 
     """
     def __init__(self, 
-                model_name_or_path, 
+                model_name_or_path,
                 instruction="Given the user query, retrieval the relevant passages", 
-                api_url="http://localhost:8000/score",
+                api_key: str = "", 
+                base_url: str = "http://localhost:8000/v1",
                 **kwargs):
-
 
         self.instruction = instruction
         self.tokenizer = AutoTokenizer.from_pretrained(model_name_or_path)
         self.model_name_or_path = model_name_or_path
-        self.api_url = api_url
+        self.base_url = base_url
 
         self.query_template = "{prefix}<Instruct>: {instruction}\n\n<Query>: {query}\n\n"
         self.document_template = "<Document>: {doc}{suffix}"
@@ -57,8 +50,6 @@ class Qwen3RerankervllmSeqClass(CrossEncoder):
         self.chat_template_suffix_token = self.tokenizer.encode(chat_template_suffix, add_special_tokens=False)
 
         self.max_length=kwargs.get('max_length', 8192)
-        
-        
 
     def format_instruction(self, instruction, query, doc):
         if isinstance(query, tuple):
@@ -96,7 +87,10 @@ class Qwen3RerankervllmSeqClass(CrossEncoder):
             "text_1": queries,
             "text_2": documents,
         }
-        response = requests.post(self.api_url, headers=headers, json=pload, stream=stream)
+        response = requests.post(self.base_url, 
+                                headers=headers, 
+                                json=pload, 
+                                stream=stream)
    
         return response
 
@@ -107,39 +101,29 @@ class Qwen3RerankervllmSeqClass(CrossEncoder):
         scores = [output["score"] for output in outputs]           
         return scores
 
-    def compute_scores(self, pairs, **kwargs):
+    def process_batch(self, pairs, **kwargs):
         queries, documents = self.preprocess(pairs)
         scores = self.get_score(queries, documents)
         return scores
 
-    def stop(self):
+    def start(self):
         pass
 
-if __name__ == '__main__':
-    instruction = "Given a web search query, retrieve relevant passages that answer the query"
-    model = "Qwen/Qwen3-Reranker-8B"
-    model = Qwen3RerankervllmSeqClass(model_name_or_path=model, instruction=instruction, max_length=2048)
-    queries = [
-        "What is the capital of France?"
-    ]
+    def predict(
+        self,
+        sentences: list[tuple[str, str]] | list[list[str]],
+        batch_size: int = None,
+        show_progress_bar: bool | None = False,
+        num_workers: int = 1,
+        activation_fct = None,
+        apply_softmax: bool | None = False,
+        convert_to_numpy: bool =  True,
+        convert_to_tensor: bool = False,
+        **kwargs
+    ) -> list[torch.Tensor]:
+        scores = self.process_batch(sentences)
+        return scores
 
-    documents = [
-        "The capital of Brazil is Brasilia.",
-        "The capital of France is Paris.",
-        "What is the capital of France?",
-        "Horses and cows are both animals.",
-    ]
-    pairs = list(zip(queries*len(documents), documents))
-    new_scores = model.compute_scores(pairs)
-    print('scores', new_scores)
-    model.stop()
-    """
-    qwen3-reranker-0.6b
-    scores [0.00018043820455204695, 0.9932016730308533, 0.8553178906440735, 2.733712608460337e-05]
-
-    qwen3-reranker-8b
-    scores [5.066717858426273e-05, 0.984429121017456, 0.48676350712776184, 7.622045814059675e-06]
-    """
-
-
+    def stop(self):
+        pass
 

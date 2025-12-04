@@ -15,7 +15,7 @@ python run_mteb_reranking.py \
   --previous_results ${previous_save_path} \
   --output_dir  results/${model_name}  \
   --benchmark "${benchmark}" \
-  --tasks "Touche2020Retrieval.v3" $@ \
+  --tasks "TRECCOVID" $@ \
   --langs "eng"
 
 

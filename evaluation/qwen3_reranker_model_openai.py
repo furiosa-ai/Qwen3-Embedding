@@ -1,5 +1,5 @@
 import logging
-
+import os
 import json
 import logging
 
@@ -8,13 +8,14 @@ from contextlib import nullcontext
 from dataclasses import dataclass, field
 from pathlib import Path
 from tqdm import tqdm
-from typing import Union, List, Tuple, Any
+from typing import Union, List, Tuple, Any, Callable
 
 import numpy as np
 import torch
 from torch import Tensor, nn
 import torch.nn.functional as F
 from torch.utils.data._utils.worker import ManagerWatchdog
+from multiprocessing.pool import ThreadPool
 
 from tqdm import tqdm
 from transformers import AutoTokenizer, AutoModelForCausalLM, AutoModelForSequenceClassification, AutoModel, is_torch_npu_available
@@ -23,6 +24,7 @@ logger = logging.getLogger(__name__)
 import gc
 import math
 from openai import OpenAI
+
 
 def map_with_progress(
     f: Callable,
