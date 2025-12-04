@@ -103,22 +103,30 @@ class Qwen3RerankerOpenAI(torch.nn.Module):
         pass
 
 if __name__ == '__main__':
-    model = Qwen3RerankerOpenAI(model_name_or_path='Qwen/Qwen3-Reranker-8B', instruction="Retrieval document that can answer user's query", max_length=2048)
-    queries = ['What is the capital of China?', 'Explain gravity']
-    documents = [
-        "The capital of China is Beijing.",
-        "Gravity is a force that attracts two bodies towards each other. It gives weight to physical objects and is responsible for the movement of planets around the sun."
+    instruction = "Given a web search query, retrieve relevant passages that answer the query"
+    model = "Qwen/Qwen3-Reranker-0.6B"
+    model = Qwen3RerankerOpenAI(model_name_or_path=model, instruction=instruction, max_length=2048)
+    queries = [
+        "What is the capital of France?"
     ]
-    pairs = list(zip(queries, documents))
+
+    documents = [
+        "The capital of Brazil is Brasilia.",
+        "The capital of France is Paris.",
+        "What is the capital of France?",
+        "Horses and cows are both animals.",
+    ]
+    
+    pairs = list(zip(queries * len(documents), documents))
     new_scores = model.compute_scores(pairs)
     print('scores', new_scores)
     model.stop()
     """
     qwen3-reranker-0.6b
-    scores [0.9947798749641705, 0.9982992772280448]
+    scores [0.0026833555855837682, 0.999244594294159, 0.9820137868795701, 0.013756642947239309]
 
     qwen3-reranker-8b
-    scores [0.9959298619216863, 0.9961755163553628]
+    scores [0.0024900105023091183, 0.9755769106559808, 0.01798620996209156, 0.0015121793202892073]
     """
 
 

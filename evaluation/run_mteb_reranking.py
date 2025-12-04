@@ -10,7 +10,6 @@ import torch
 from transformers import HfArgumentParser
 import mteb
 from utils import *
-from qwen3_reranker_model import Qwen3RerankerInferenceModel
 
 logging.basicConfig(
     format="%(levelname)s|%(asctime)s|%(name)s#%(lineno)s: %(message)s",
@@ -46,6 +45,10 @@ class EvalArguments:
     model: Optional[str] = field(
         default=None,
         metadata={"help": "Path to pretrained model or model identifier from huggingface.co/models"}
+    )
+    backend: Optional[str] = field(
+        default="openai",
+        metadata={"help": "inference backend, openai, vllm"}
     )
     model_kwargs: Optional[str] = field(
         default=None,
@@ -100,7 +103,11 @@ def get_tasks(names: list[str] | None, languages: list[str] | None = None, bench
     return running_tasks
 
 
-def get_model(model_name: str,  precision: str = 'fp16', **kwargs):
+def get_model(model_name: str,  precision: str = 'fp16', backend: str = "openai", **kwargs):
+    if backend == "vllm":
+        from qwen3_reranker_model import Qwen3RerankerInferenceModel
+    if backend == "openai":
+        from qwen3_reranker_model_openai import Qwen3RerankerInferenceModel
     model = Qwen3RerankerInferenceModel(model_name, **kwargs)
     return model
 
