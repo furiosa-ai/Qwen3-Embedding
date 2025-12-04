@@ -100,24 +100,21 @@ class Qwen3RerankerInferenceModel(torch.nn.Module):
                 logprobs=20,
                 extra_body={"allowed_token_ids": [self.true_token_id, self.false_token_id]})
 
-            scores = []
-            for i in range(len(response.choices)):
-                final_logits = response.choices[i].logprobs.top_logprobs[-1]
-                
-                if self.true_token not in final_logits:
-                    true_logit = -10
-                else:
-                    true_logit = final_logits[self.true_token]
-                if self.false_token not in final_logits:
-                    false_logit = -10
-                else:
-                    false_logit = final_logits[self.false_token]
-                true_score = math.exp(true_logit)
-                false_score = math.exp(false_logit)
-                score = true_score / (true_score + false_score)
-                scores.append(score)
+            final_logits = response.choices[0].logprobs.top_logprobs[-1]
+            
+            if self.true_token not in final_logits:
+                true_logit = -10
+            else:
+                true_logit = final_logits[self.true_token]
+            if self.false_token not in final_logits:
+                false_logit = -10
+            else:
+                false_logit = final_logits[self.false_token]
+            true_score = math.exp(true_logit)
+            false_score = math.exp(false_logit)
+            score = true_score / (true_score + false_score)
 
-            return scores
+            return score
         
         results = map_with_progress(fn, messages, num_threads=3)
         print(results)
