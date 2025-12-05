@@ -82,7 +82,7 @@ class Qwen3RerankerInferenceModel(torch.nn.Module):
         return text
 
     def process_batch(self, pairs, **kwargs):
-        # check 
+        # check
         messages = [self.format_instruction(self.instruction, query, doc) for query, doc, _ in pairs]
         
         messages =  self.tokenizer.apply_chat_template(
@@ -117,7 +117,7 @@ class Qwen3RerankerInferenceModel(torch.nn.Module):
             return score
         
         results = map_with_progress(fn, messages, num_threads=3)
-        print(results)
+        
         return results
 
     def start(self):

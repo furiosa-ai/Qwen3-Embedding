@@ -22,7 +22,7 @@ logger = logging.getLogger(__name__)
 
 import gc
 import math
-from openai import OpenAI
+import requests
 
 class Qwen3RerankerInferenceModel(torch.nn.Module):
     """
@@ -32,7 +32,7 @@ class Qwen3RerankerInferenceModel(torch.nn.Module):
                 model_name_or_path,
                 instruction="Given the user query, retrieval the relevant passages", 
                 api_key: str = "", 
-                base_url: str = "http://localhost:8000/v1",
+                base_url: str = "http://localhost:8000/v1/score",
                 **kwargs):
 
         self.instruction = instruction
@@ -63,11 +63,12 @@ class Qwen3RerankerInferenceModel(torch.nn.Module):
         return text
 
     def preprocess(self, pairs):
-        input_queries = [self.query_template.format(prefix=self.prefix, instruction=self.instruction, query=query) for query, doc in pairs] 
+
+        input_queries = [self.query_template.format(prefix=self.prefix, instruction=self.instruction, query=query) for query, doc, _ in pairs] 
         input_queries_len = [len(self.tokenizer.encode(query, add_special_tokens=False)) for query in input_queries]
         
         # truncate documents if needed 
-        full_sentences = [self.format_instruction(instruction, query, doc) for query, doc in pairs]
+        full_sentences = [self.format_instruction(self.instruction, query, doc) for query, doc, _ in pairs]
 
         full_sentences =  self.tokenizer.apply_chat_template(
             full_sentences, tokenize=True, add_generation_prompt=False, enable_thinking=False
@@ -96,6 +97,7 @@ class Qwen3RerankerInferenceModel(torch.nn.Module):
 
     def get_score(self, queries, documents):
         response = self.post_http_request(queries, documents)
+
         outputs = json.loads(response.content)["data"]
         outputs.sort(key=lambda x: x["index"])
         scores = [output["score"] for output in outputs]           
