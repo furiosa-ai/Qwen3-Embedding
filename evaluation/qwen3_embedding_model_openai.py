@@ -55,13 +55,16 @@ class OpenAITextEmbedder(torch.nn.Module):
         prompt: str | None = None,
         device: str | torch.device = 'cpu',
     ) -> torch.Tensor:
-        
-        embeddings = self.client.embeddings.create(model=self.model, input = sentences, encoding_format="float")
+        # truncate input sentences to max_length
+        inputs = [self.tokenizer(sentence, padding=False, truncation=True, max_length=max_length, return_tensors='pt')
+                  .input_ids.tolist()[0] for sentence in sentences]
+
+        embeddings = self.client.embeddings.create(model=self.model, input=inputs, encoding_format="float")
         embeddings = torch.tensor([l.embedding for l in embeddings.data])
 
         if self.truncate_dim > 0: 
             embeddings = embeddings[:, :self.truncate_dim]
-        
+
         return embeddings
 
 def _encode_loop(
