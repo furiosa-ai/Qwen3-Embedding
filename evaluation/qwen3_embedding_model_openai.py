@@ -56,6 +56,9 @@ class OpenAITextEmbedder(torch.nn.Module):
         device: str | torch.device = 'cpu',
     ) -> torch.Tensor:
         # truncate input sentences to max_length
+        if prompt:
+            sentences = [prompt + sentence for sentence in sentences]
+        
         inputs = [self.tokenizer(sentence, padding=False, truncation=True, max_length=max_length, return_tensors='pt')
                   .input_ids.tolist()[0] for sentence in sentences]
 
