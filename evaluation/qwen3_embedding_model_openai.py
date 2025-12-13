@@ -56,19 +56,23 @@ class OpenAITextEmbedder(torch.nn.Module):
         device: str | torch.device = 'cpu',
     ) -> torch.Tensor:
         # truncate input sentences to max_length
-        if prompt:
-            sentences = [prompt + sentence for sentence in sentences]
-        
-        inputs = [self.tokenizer(sentence, padding=False, truncation=True, max_length=max_length, return_tensors='pt')
-                  .input_ids.tolist()[0] for sentence in sentences]
+        inputs = self.tokenize(sentences, max_length, prompt).to(device)
 
-        embeddings = self.client.embeddings.create(model=self.model, input=inputs, encoding_format="float")
-        embeddings = torch.tensor([l.embedding for l in embeddings.data])
+        response = self.client.embeddings.create(
+            input=input_ids,
+            model=self.model,
+            dimensions=(self.truncate_dim if self.truncate_dim > 0 else None),
+            extra_body={"normalize": self.do_norm},
+         )
 
-        if self.truncate_dim > 0: 
-            embeddings = embeddings[:, :self.truncate_dim]
-
+        embeddings = torch.tensor([datum.embedding for datum in response.data])
         return embeddings
+    
+    def tokenize(self, texts, max_length: int, prompt=None) -> BatchEncoding:
+        if prompt:
+            texts = [prompt + t for t in texts] 
+        inputs = self.tokenizer(texts, padding=False, truncation=True, max_length=max_length)
+        return inputs
 
 def _encode_loop(
     model: TransformersTextEmbedder,
