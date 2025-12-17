@@ -8,8 +8,6 @@ model_name=$1
 shift
 previous_save_path=$1
 shift
-benchmark=$1
-shift
 
 python run_mteb_reranking.py \
   --model ${model_path} \
@@ -18,6 +16,4 @@ python run_mteb_reranking.py \
   --run_kwargs "{\"save_predictions\": \"true\"}" \
   --previous_results ${previous_save_path} \
   --output_dir  results/${model_name}  \
-  --benchmark "${benchmark}" $@
-
-  #--tasks "WinoGrande"
+  --tasks "TRECCOVID"

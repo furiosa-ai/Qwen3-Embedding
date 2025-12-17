@@ -243,7 +243,56 @@ def get_tasks(names: list[str] | None, languages: list[str] | None = None, bench
     if benchmark:
         tasks = mteb.get_benchmark(benchmark).tasks
     else:
-        tasks = mteb.get_tasks(languages=languages, tasks=names)
+        # https://github.com/embeddings-benchmark/mteb/blob/1.38.9/mteb/benchmarks/benchmarks.py#L34-L87
+        tasks = mteb.get_tasks(
+            tasks=[
+#                "ArguAna",
+#                "ArXivHierarchicalClusteringP2P",
+#                "ArXivHierarchicalClusteringS2S",
+#                "AskUbuntuDupQuestions",
+#                "BIOSSES",
+#                "Banking77Classification",
+#                "BiorxivClusteringP2P.v2",
+#                "CQADupstackGamingRetrieval",
+#                "CQADupstackUnixRetrieval",
+#                "ClimateFEVERHardNegatives",
+#                "FEVERHardNegatives",
+#                "FiQA2018",
+#                "HotpotQAHardNegatives",
+#                "ImdbClassification",
+#                "MTOPDomainClassification",
+#                "MassiveIntentClassification",
+#                "MassiveScenarioClassification",
+#                "MedrxivClusteringP2P.v2",
+#                "MedrxivClusteringS2S.v2",
+                "MindSmallReranking",
+                "SCIDOCS",
+#                "SICK-R",
+#                "STS12",
+#                "STS13",
+#                "STS14",
+#                "STS15",
+#                "STSBenchmark",
+#                "SprintDuplicateQuestions",
+#                "StackExchangeClustering.v2",
+#                "StackExchangeClusteringP2P.v2",
+#                "TRECCOVID",
+#                "Touche2020Retrieval.v3",
+#                "ToxicConversationsClassification",
+                "TweetSentimentExtractionClassification",
+                "TwentyNewsgroupsClustering.v2",
+                "TwitterSemEval2015",
+#                "TwitterURLCorpus",
+                "SummEvalSummarization.v2",
+            ],
+            languages=["eng"],
+            eval_splits=["test"],
+            exclusive_language_filter=True,
+        ) + (
+#            mteb.get_task("AmazonCounterfactualClassification", eval_splits=["test"], hf_subsets=["en"]),
+#            mteb.get_task("STS17", eval_splits=["test"], hf_subsets=["en-en"]),
+            mteb.get_task("STS22.v2", eval_splits=["test"], hf_subsets=["en"]),
+		)
     return tasks
 
 

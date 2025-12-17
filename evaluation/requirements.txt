@@ -1,8 +1,10 @@
+hf-transfer
 torch
 transformers
 mteb==1.38.9
 numpy
 openai
+pillow
 requests
 sentence-transformers
 tqdm
