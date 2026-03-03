@@ -1,6 +1,6 @@
 hf-transfer
 torch
-transformers
+transformers==4.51.3
 mteb==1.38.9
 numpy
 openai
