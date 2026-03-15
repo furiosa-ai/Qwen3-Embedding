@@ -1,23 +1,24 @@
 from __future__ import annotations
 
+import json
 import logging
 import queue
-import json
 from collections.abc import Sequence
 from contextlib import nullcontext
 from typing import Any
 
-from tqdm.autonotebook import tqdm
+import mteb
 import numpy as np
 import torch
-from torch.utils.data._utils.worker import ManagerWatchdog
-from transformers import AutoModel, AutoTokenizer
-from transformers.tokenization_utils_base import BatchEncoding
 from mteb.encoder_interface import PromptType
-from mteb.models.wrapper import Wrapper
 from mteb.model_meta import ModelMeta
-import mteb
+from mteb.models.wrapper import Wrapper
 from openai import OpenAI
+from torch.utils.data._utils.worker import ManagerWatchdog
+from tqdm.autonotebook import tqdm
+from transformers import AutoTokenizer
+from transformers.tokenization_utils_base import BatchEncoding
+
 logger = logging.getLogger(__name__)
 
 
@@ -30,11 +31,12 @@ class TransformersTextEmbedder(torch.nn.Module):
         truncate_dim: int = 0,
         padding_left: bool = False,
         attn_type: str = 'causal',
+        base_url: str = "http://localhost:8000/v1",
         **kwargs,
     ):
         super().__init__()
         self.model = model
-        self.client = OpenAI(api_key="", base_url="http://localhost:8000/v1")
+        self.client = OpenAI(api_key="", base_url=base_url)
         self.tokenizer = AutoTokenizer.from_pretrained(model, **kwargs)
         self.tokenizer.padding_side = "left"
         self.pooler_type = pooler_type
@@ -47,17 +49,17 @@ class TransformersTextEmbedder(torch.nn.Module):
             self.pooling = self._pooling_first
         elif pooler_type == 'last':
             self.pooling = self._pooling_last
-            
+
         elif pooler_type == 'mean':
             self.pooling = self._pooling_mean
-        
+
         else:
             ValueError(f"Wrong pooler : {self.pooler_type}")
 
 
     def embed(
-        self, 
-        sentences: Sequence[str], 
+        self,
+        sentences: Sequence[str],
         max_length: int,
         prompt: str | None = None,
         device: str | torch.device = 'cpu',
@@ -68,7 +70,7 @@ class TransformersTextEmbedder(torch.nn.Module):
 
     def tokenize(self, texts, max_length: int, prompt=None) -> BatchEncoding:
         if prompt:
-            texts = [prompt + t for t in texts] 
+            texts = [prompt + t for t in texts]
         inputs = self.tokenizer(texts, truncation=True, max_length=max_length)
         return inputs
 
@@ -134,23 +136,22 @@ def _encode_loop(
     watchdog = ManagerWatchdog()
     keep_queue = queue.Queue(qsize + 1)
 
-    with torch.inference_mode():
-        with torch.autocast(
-            device_type=device.type, dtype=amp_dtype
-        ) if amp_dtype is not None else nullcontext():
-            while watchdog.is_alive():
-                r = input_queue.get()
-                if r is None:
-                    break
+    with torch.inference_mode(), torch.autocast(
+        device_type=device.type, dtype=amp_dtype
+    ) if amp_dtype is not None else nullcontext():
+        while watchdog.is_alive():
+            r = input_queue.get()
+            if r is None:
+                break
 
-                n, inputs = r
-                embeddings = model.embed(*inputs, device=device)
-                output_queue.put((n, embeddings))
-                if keep_queue.full():
-                    i = keep_queue.get()
-                    del i
-                keep_queue.put(embeddings)
-                del r, n, inputs
+            n, inputs = r
+            embeddings = model.embed(*inputs, device=device)
+            output_queue.put((n, embeddings))
+            if keep_queue.full():
+                i = keep_queue.get()
+                del i
+            keep_queue.put(embeddings)
+            del r, n, inputs
 
     while not keep_queue.empty():
         i = keep_queue.get()
@@ -174,10 +175,10 @@ class Qwen3Embedding(Wrapper):
         precision: str = 'fp32',
         mp_qsize: int = 4,
         instruction_dict_path=None,
-        instruction_template=None, 
+        instruction_template=None,
         **kwargs,  # For `TransformersTextEmbedder`
     ) -> None:
-        
+
         model_name = model.split('/')
         if model_name[-1] == '':
             model_name = model_name[-2]
@@ -186,7 +187,7 @@ class Qwen3Embedding(Wrapper):
         model_name = kwargs.pop('model_name', model_name)
         self.model = self._model_class(model, **kwargs)
         self.mteb_model_meta = ModelMeta(
-            name=model_name, revision=kwargs.get('revision', None), release_date=None, languages=None, n_parameters=None, memory_usage_mb=None, max_tokens=None, embed_dim=None, license=None, open_weights=False, public_training_code=None, public_training_data=None, framework=["Sentence Transformers"], similarity_fn_name="cosine", use_instructions=True, training_datasets=None
+            name=model_name, revision=kwargs.get('revision'), release_date=None, languages=None, n_parameters=None, memory_usage_mb=None, max_tokens=None, embed_dim=None, license=None, open_weights=False, public_training_code=None, public_training_data=None, framework=["Sentence Transformers"], similarity_fn_name="cosine", use_instructions=True, training_datasets=None
         )
 
         self.use_instruction = use_instruction
@@ -235,7 +236,7 @@ class Qwen3Embedding(Wrapper):
         if 'Retrieval' in task_type and prompt_type == 'query' and instruction is None:
             instruction = "Retrieval relevant passage for the given query."
         return instruction
-        
+
     def format_instruction(self, instruction, prompt_type):
         if instruction is not None and len(instruction.strip()) > 0:
             instruction = self.instruction_template.format(instruction)
@@ -312,7 +313,7 @@ class Qwen3Embedding(Wrapper):
     def start(self):
         self.model.share_memory()
         logger.warning(f"Starting {self.world_size} worker processes.")
-        mp_ctx = torch.multiprocessing.get_context('spawn')
+        mp_ctx = torch.multiprocessing.get_context('fork') # spawn
         self._input_queues = [mp_ctx.Queue(self.mp_qsize) for _ in range(self.world_size)]
         self._output_queues = [mp_ctx.Queue(self.mp_qsize) for _ in range(self.world_size)]
         self._workers = list()

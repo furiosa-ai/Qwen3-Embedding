@@ -1,16 +1,14 @@
 import json
-import csv
-import sys
 import logging
 import os
+import sys
 from dataclasses import dataclass, field
-from functools import partial
-from typing import Optional
-import torch
-from transformers import HfArgumentParser
+
 import mteb
-from utils import *
+import torch
 from qwen3_reranker_model import Qwen3RerankerInferenceModel
+from transformers import HfArgumentParser
+from utils import *
 
 logging.basicConfig(
     format="%(levelname)s|%(asctime)s|%(name)s#%(lineno)s: %(message)s",
@@ -43,33 +41,34 @@ class EvalArguments:
     """
     Arguments.
     """
-    model: Optional[str] = field(
+    model: str | None = field(
         default=None,
         metadata={"help": "Path to pretrained model or model identifier from huggingface.co/models"}
     )
-    model_kwargs: Optional[str] = field(
+    model_kwargs: str | None = field(
         default=None,
         metadata={"help": "The specific model kwargs, json string."},
     )
-    encode_kwargs: Optional[str] = field(
+    encode_kwargs: str | None = field(
         default=None,
         metadata={"help": "The specific encode kwargs, json string."},
     )
-    run_kwargs: Optional[str] = field(
+    run_kwargs: str | None = field(
         default=None,
         metadata={"help": "The specific kwargs for `MTEB.run()`, json string."},
     )
 
-    output_dir: Optional[str] = field(default='results', metadata={"help": "output dir of results"})
-    previous_results: Optional[str] = field(default='results', metadata={"help": "output dir of results"})
+    output_dir: str | None = field(default='results', metadata={"help": "output dir of results"})
+    previous_results: str | None = field(default='results', metadata={"help": "output dir of results"})
 
-    benchmark: Optional[str] = field(default=None, metadata={"help": "Benchmark name"})
-    tasks: Optional[str] = field(default=None, metadata={"help": "',' seprated"})
-    langs: Optional[str] = field(default=None, metadata={"help": "',' seprated"})
+    benchmark: str | None = field(default=None, metadata={"help": "Benchmark name"})
+    tasks: str | None = field(default=None, metadata={"help": "',' seprated"})
+    langs: str | None = field(default=None, metadata={"help": "',' seprated"})
     only_load: bool = field(default=False, metadata={"help": ""})
     load_model: bool = field(default=False, metadata={"help": "when only_load"})
     batch_size: int = field(default=128, metadata={"help": "Will be set to `encode_kwargs`"})
     precision: str = field(default='fp16', metadata={"help": "amp_fp16,amp_bf16,fp16,bf16,fp32"})
+    base_url: str = field(default="http://localhost:8000/v1", metadata={"help": "Base URL for the embedding model API"})
 
     def __post_init__(self):
         if isinstance(self.tasks, str):
@@ -85,7 +84,7 @@ class EvalArguments:
                 setattr(self, name, json.loads(attr))
 
 def get_tasks(names: list[str] | None, languages: list[str] | None = None, benchmark: str | None = None):
-    
+
     if benchmark:
         tasks = mteb.get_benchmark(benchmark).tasks
     else:
@@ -100,8 +99,8 @@ def get_tasks(names: list[str] | None, languages: list[str] | None = None, bench
     return running_tasks
 
 
-def get_model(model_name: str,  precision: str = 'fp16', **kwargs):
-    model = Qwen3RerankerInferenceModel(model_name, **kwargs)
+def get_model(model_name: str, base_url: str, precision: str = 'fp16', **kwargs):
+    model = Qwen3RerankerInferenceModel(model_name, base_url=base_url, **kwargs)
     return model
 
 
@@ -131,7 +130,7 @@ def run_eval(model, tasks: list, args: EvalArguments, **kwargs):
 
     _num_gpus, _started = torch.cuda.device_count(), False
     if _num_gpus > 1 and not _started and hasattr(model, 'start'):
-        model.start() 
+        model.start()
         _started = True
 
     for t in tasks:
@@ -173,7 +172,7 @@ def run_eval(model, tasks: list, args: EvalArguments, **kwargs):
                         output_folder=args.output_dir,
                         previous_results=retrieval_save_path
                     )
-                except Exception as e:
+                except Exception:
                     try:
                         os.environ['HF_DATASETS_OFFLINE'] = "0"
                         result = evaluation.run(
@@ -214,7 +213,7 @@ def main():
             t.load_data()
         if not args.load_model:
             return
-    model = get_model(args.model, **args.model_kwargs)
+    model = get_model(args.model, args.base_url, **args.model_kwargs)
     if args.only_load:
         return
 

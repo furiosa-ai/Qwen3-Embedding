@@ -1,21 +1,17 @@
 import json
-import sys
 import logging
 import os
+import sys
 from dataclasses import dataclass, field
-from functools import partial
-from typing import Optional, Any
-
-import torch
-from transformers import HfArgumentParser
-import mteb
 from pathlib import Path
-from mteb import AbsTaskRetrieval,RetrievalEvaluator
 from time import time
-from mteb.models.sentence_transformer_wrapper import SentenceTransformerWrapper
-import csv
-from mteb.benchmarks.benchmarks import Benchmark
+from typing import Any
+
+import mteb
+import torch
+from mteb import AbsTaskRetrieval, RetrievalEvaluator
 from qwen3_embedding_model import Qwen3Embedding
+from transformers import HfArgumentParser
 from utils import *
 
 logging.basicConfig(
@@ -98,7 +94,7 @@ def _evaluate_subset(
             os.makedirs(output_folder)
 
     if save_predictions:
-        top_k = kwargs.get("top_k", None)
+        top_k = kwargs.get("top_k")
         if top_k is not None:
             for qid in list(results.keys()):
                 doc_ids = set(
@@ -194,37 +190,38 @@ class EvalArguments:
     """
     Arguments.
     """
-    model: Optional[str] = field(
+    model: str | None = field(
         default=None,
         metadata={"help": "Path to pretrained model or model identifier from huggingface.co/models"}
     )
-    model_name: Optional[str] = field(
+    model_name: str | None = field(
         default=None,
         metadata={"help": "Model name for the save path"}
     )
-    model_kwargs: Optional[str] = field(
+    model_kwargs: str | None = field(
         default=None,
         metadata={"help": "The specific model kwargs, json string."},
     )
-    encode_kwargs: Optional[str] = field(
+    encode_kwargs: str | None = field(
         default=None,
         metadata={"help": "The specific encode kwargs, json string."},
     )
-    run_kwargs: Optional[str] = field(
+    run_kwargs: str | None = field(
         default=None,
         metadata={"help": "The specific kwargs for `MTEB.run()`, json string."},
     )
 
-    output_dir: Optional[str] = field(default='results', metadata={"help": "output dir of results"})
-    benchmark: Optional[str] = field(default=None, metadata={"help": "Benchmark name"})
-    tasks: Optional[str] = field(default=None, metadata={"help": "',' seprated"})
-    langs: Optional[str] = field(default=None, metadata={"help": "',' seprated"})
+    output_dir: str | None = field(default='results', metadata={"help": "output dir of results"})
+    benchmark: str | None = field(default=None, metadata={"help": "Benchmark name"})
+    tasks: str | None = field(default=None, metadata={"help": "',' seprated"})
+    langs: str | None = field(default=None, metadata={"help": "',' seprated"})
     only_load: bool = field(default=False, metadata={"help": ""})
     load_model: bool = field(default=False, metadata={"help": "when only_load"})
 
     batch_size: int = field(default=128, metadata={"help": "Will be set to `encode_kwargs`"})
     precision: str = field(default='fp16', metadata={"help": "amp_fp16,amp_bf16,fp16,bf16,fp32"})
-
+    base_url: str = field(default="http://localhost:8000/v1", metadata={"help": "Base URL for the embedding model API"})
+    
     def __post_init__(self):
         if isinstance(self.tasks, str):
             self.tasks = self.tasks.split(',')
@@ -318,7 +315,7 @@ def run_bright(t, model, args, **kwargs):
     }
     encode_kwargs = args.encode_kwargs or dict()
 
-    for task in Instructions.keys():
+    for task in Instructions:
         instruct = Instructions[task]
         t.metadata.prompt = {'query': instruct}
         evaluation = mteb.MTEB(tasks=[t])
@@ -359,7 +356,7 @@ def run_eval(model, tasks: list, args: EvalArguments, **kwargs):
         if t.metadata.name in RARB_tasks:
             load_rarb_data(t)
         evaluation = mteb.MTEB(tasks=[t])
-        
+
         try:
             os.environ['HF_DATASETS_OFFLINE'] = "1"
             results = evaluation.run(
@@ -368,7 +365,7 @@ def run_eval(model, tasks: list, args: EvalArguments, **kwargs):
                 encode_kwargs=encode_kwargs,
                 **kwargs
             )
-        except Exception as e:
+        except Exception:
             try:
                 os.environ['HF_DATASETS_OFFLINE'] = "0"
                 results = evaluation.run(
@@ -409,14 +406,14 @@ def main():
             logger.warning(f"Loading {t}")
             try:
                 t.load_data()
-            except Exception as e:
+            except Exception:
                 t.load_data(force_download=True)
             else:
                 continue
-            
+
         if not args.load_model:
             return
-    model = get_model(args.model, args.model_name, precision=args.precision, **args.model_kwargs)
+    model = get_model(args.model, args.model_name, precision=args.precision, base_url=args.base_url,  **args.model_kwargs)
     if args.only_load:
         return
 
